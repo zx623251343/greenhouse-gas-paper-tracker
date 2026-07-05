@@ -8,16 +8,11 @@ const chips = [
   "clumped isotope", "methane clumped isotope", "stable isotope", "城市水体"
 ];
 
-const fixedMetrics = [
-  ["已收录论文", "0"],
-  ["近一年发表", "0"],
-  ["总引用数", "0"],
-  ["开放 PDF", "0"],
-  ["DOI 可用", "0"],
-  ["同位素相关", "0"]
-];
-
-const state = { chip: "全部", source: "all", query: "" };
+const state = {
+  chip: "全部",
+  source: "all",
+  query: ""
+};
 
 const chipFilters = document.querySelector("#chipFilters");
 const metricCards = document.querySelector("#metricCards");
@@ -37,6 +32,29 @@ function escapeHtml(value) {
   }[char]));
 }
 
+function normalizeText(value) {
+  return String(value ?? "").trim();
+}
+
+function getPaperDate(paper) {
+  const value = paper.publicationDate || paper.year;
+  if (!value) return null;
+
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function getDoiUrl(doi) {
+  const cleanDoi = normalizeText(doi);
+  if (!cleanDoi) return "";
+
+  if (cleanDoi.startsWith("http://") || cleanDoi.startsWith("https://")) {
+    return cleanDoi;
+  }
+
+  return `https://doi.org/${cleanDoi}`;
+}
+
 function renderChips() {
   chipFilters.innerHTML = chips.map(chip => (
     `<button class="chip ${chip === state.chip ? "is-active" : ""}" type="button" data-chip="${escapeHtml(chip)}">${escapeHtml(chip)}</button>`
@@ -44,23 +62,45 @@ function renderChips() {
 }
 
 function calculateMetrics() {
-  const currentYear = new Date().getFullYear();
-  const totalCitations = papers.reduce((sum, paper) => sum + Number(paper.citations || 0), 0);
-  const recent = papers.filter(paper => Number(paper.year) >= currentYear - 1).length;
-  const openPdf = papers.filter(paper => paper.pdfUrl).length;
-  const doiCount = papers.filter(paper => paper.doi).length;
-  const isotopeCount = papers.filter(paper => {
-    const text = [paper.title, paper.abstract, paper.tags?.join(" ")].join(" ").toLowerCase();
-    return text.includes("isotope") || text.includes("δ13c") || text.includes("δd") || text.includes("clumped");
+  const now = new Date();
+
+  const oneWeekAgo = new Date(now);
+  const oneMonthAgo = new Date(now);
+  const oneYearAgo = new Date(now);
+
+  oneWeekAgo.setDate(now.getDate() - 7);
+  oneMonthAgo.setMonth(now.getMonth() - 1);
+  oneYearAgo.setFullYear(now.getFullYear() - 1);
+
+  const totalCitations = papers.reduce((sum, paper) => {
+    return sum + Number(paper.citations || 0);
+  }, 0);
+
+  const weekCount = papers.filter(paper => {
+    const date = getPaperDate(paper);
+    return date && date >= oneWeekAgo;
   }).length;
 
+  const monthCount = papers.filter(paper => {
+    const date = getPaperDate(paper);
+    return date && date >= oneMonthAgo;
+  }).length;
+
+  const yearCount = papers.filter(paper => {
+    const date = getPaperDate(paper);
+    return date && date >= oneYearAgo;
+  }).length;
+
+  const openPdf = papers.filter(paper => paper.pdfUrl).length;
+  const doiCount = papers.filter(paper => paper.doi).length;
+
   return [
-    ["已收录论文", papers.length],
-    ["近一年发表", recent],
+    ["最近一周发表", weekCount],
+    ["最近一月发表", monthCount],
+    ["最近一年发表", yearCount],
     ["总引用数", totalCitations.toLocaleString()],
     ["开放 PDF", openPdf],
-    ["DOI 可用", doiCount],
-    ["同位素相关", isotopeCount]
+    ["DOI 可用", doiCount]
   ];
 }
 
@@ -75,13 +115,18 @@ function getFilteredPapers() {
 
   return papers.filter(paper => {
     const tags = paper.tags || [];
+
     const matchesChip = state.chip === "全部" || tags.includes(state.chip);
-    const matchesSource = state.source === "all" || paper.source === state.source;
+
+    const sourceText = String(paper.source || "");
+    const matchesSource = state.source === "all" || sourceText.includes(state.source);
+
     const haystack = [
       paper.title,
       paper.authors,
       paper.journal,
       paper.year,
+      paper.publicationDate,
       paper.doi,
       paper.source,
       paper.abstract,
@@ -100,7 +145,7 @@ function renderRows() {
   resultSummary.textContent = `${state.chip} · ${filtered.length} 篇`;
 
   if (!rows.length) {
-    paperRows.innerHTML = `<tr><td class="empty" colspan="8">没有匹配的论文，请调整关键词或等待自动更新。</td></tr>`;
+    paperRows.innerHTML = `<tr><td class="empty" colspan="8">没有匹配的论文，请调整关键词、来源或等待自动更新。</td></tr>`;
     return;
   }
 
@@ -111,10 +156,11 @@ function renderRows() {
     const date = escapeHtml(paper.publicationDate || paper.year || "");
     const citations = escapeHtml(paper.citations || 0);
     const references = escapeHtml(paper.references || 0);
-    const source = escapeHtml(paper.source || "Semantic Scholar");
+    const source = escapeHtml(paper.source || "Unknown");
     const tags = paper.tags || [];
+
     const paperUrl = paper.paperUrl || "#";
-    const doiUrl = paper.doi ? `https://doi.org/${encodeURIComponent(paper.doi)}` : "";
+    const doiUrl = getDoiUrl(paper.doi);
     const pdfUrl = paper.pdfUrl || "";
 
     return `
@@ -122,7 +168,9 @@ function renderRows() {
         <td>${date}</td>
         <td>
           <div class="paper-title">${title}</div>
-          <div class="tags">${tags.map(tag => `<span class="tag">${escapeHtml(tag)}</span>`).join("")}</div>
+          <div class="tags">
+            ${tags.map(tag => `<span class="tag">${escapeHtml(tag)}</span>`).join("")}
+          </div>
         </td>
         <td>${authors}</td>
         <td>${journal}</td>
@@ -142,8 +190,12 @@ function renderRows() {
 async function loadPapers() {
   try {
     const response = await fetch(`papers.json?v=${Date.now()}`);
-    if (!response.ok) throw new Error("papers.json not found");
-    papers = await response.json();
+    if (!response.ok) {
+      throw new Error("papers.json not found");
+    }
+
+    const data = await response.json();
+    papers = Array.isArray(data) ? data : [];
   } catch (error) {
     papers = [];
     console.warn("无法读取 papers.json，请确认文件已上传并等待自动更新。", error);
@@ -156,6 +208,7 @@ async function loadPapers() {
 chipFilters.addEventListener("click", event => {
   const button = event.target.closest("button[data-chip]");
   if (!button) return;
+
   state.chip = button.dataset.chip;
   renderChips();
   renderRows();
