@@ -7,26 +7,28 @@ from pathlib import Path
 
 OUTPUT_FILE = Path("papers.json")
 
-QUERIES = [
-    '("greenhouse gas" OR methane OR "carbon dioxide" OR "nitrous oxide" OR CH4 OR CO2 OR N2O) AND (river OR lake OR reservoir OR wetland OR pond OR stream OR riparian OR littoral OR shoreline OR "drawdown zone" OR sediment)',
-    '("stable isotope" OR "methane isotope" OR "clumped isotope" OR "methane clumped isotope" OR "δ13C" OR "δD") AND (methane OR CH4 OR "carbon dioxide" OR CO2) AND (lake OR river OR reservoir OR wetland OR sediment OR riparian)',
-    '("greenhouse gas flux" OR "methane ebullition" OR "diffusive flux" OR "floating chamber") AND (lake OR river OR reservoir OR wetland OR pond OR riparian)',
+SEARCH_TERMS = [
+    "greenhouse gas methane lake",
+    "greenhouse gas methane river",
+    "greenhouse gas methane reservoir",
+    "greenhouse gas methane wetland",
+    "greenhouse gas carbon dioxide lake",
+    "greenhouse gas carbon dioxide river",
+    "greenhouse gas nitrous oxide wetland",
+    "methane ebullition lake sediment",
+    "diffusive greenhouse gas flux river",
+    "floating chamber greenhouse gas wetland",
+    "riparian greenhouse gas methane",
+    "littoral zone methane emission",
+    "drawdown zone methane reservoir",
+    "aquatic terrestrial interface greenhouse gas",
+    "stable isotope methane lake sediment",
+    "methane isotope wetland sediment",
+    "methane clumped isotope sediment",
+    "clumped isotope methane",
+    "carbon isotope methane aquatic sediment",
+    "stable isotopes carbon dioxide methane river"
 ]
-
-FIELDS = ",".join([
-    "paperId",
-    "title",
-    "abstract",
-    "year",
-    "publicationDate",
-    "authors",
-    "venue",
-    "citationCount",
-    "referenceCount",
-    "externalIds",
-    "url",
-    "openAccessPdf"
-])
 
 TAG_RULES = [
     ("CO2", ["co2", "carbon dioxide"]),
@@ -35,31 +37,32 @@ TAG_RULES = [
     ("河流", ["river", "stream"]),
     ("湖泊", ["lake"]),
     ("水库", ["reservoir"]),
-    ("湿地", ["wetland", "marsh", "swamp"]),
+    ("湿地", ["wetland", "marsh", "swamp", "peatland"]),
     ("河口", ["estuary", "estuarine"]),
     ("池塘", ["pond"]),
     ("沟渠", ["ditch"]),
-    ("岸带", ["riparian", "littoral", "shoreline", "aquatic-terrestrial"]),
-    ("消落带", ["drawdown zone", "water-level fluctuation"]),
+    ("岸带", ["riparian", "littoral", "shoreline", "aquatic terrestrial", "aquatic-terrestrial"]),
+    ("消落带", ["drawdown zone", "water level fluctuation", "water-level fluctuation"]),
     ("沉积物", ["sediment"]),
-    ("扩散通量", ["diffusive flux", "diffusion"]),
-    ("冒泡释放", ["ebullition", "bubbling"]),
+    ("扩散通量", ["diffusive flux", "diffusion", "gas transfer"]),
+    ("冒泡释放", ["ebullition", "bubble", "bubbling"]),
     ("浮箱法", ["floating chamber", "chamber"]),
-    ("碳氮循环", ["carbon", "nitrogen"]),
+    ("碳氮循环", ["carbon", "nitrogen", "biogeochemical"]),
     ("微生物过程", ["microbial", "microbiome", "methanogen", "methanotroph"]),
-    ("稳定同位素", ["stable isotope"]),
-    ("甲烷同位素", ["methane isotope", "δ13c-ch4", "δd-ch4"]),
+    ("稳定同位素", ["stable isotope", "stable isotopes"]),
+    ("甲烷同位素", ["methane isotope", "carbon isotope", "hydrogen isotope"]),
     ("甲烷团簇同位素", ["clumped isotope", "methane clumped isotope"]),
-    ("同位素示踪", ["isotope tracing", "isotopic constraint", "isotopic evidence"]),
+    ("同位素示踪", ["isotope tracing", "isotopic", "isotope"]),
     ("甲烷来源解析", ["methane source", "methane origin", "source apportionment"]),
-    ("δ13C-CH4", ["δ13c-ch4", "13c-ch4"]),
-    ("δD-CH4", ["δd-ch4", "d-ch4"]),
-    ("δ13C-CO2", ["δ13c-co2", "13c-co2"]),
+    ("δ13C-CH4", ["δ13c-ch4", "13c-ch4", "carbon isotope methane"]),
+    ("δD-CH4", ["δd-ch4", "d-ch4", "hydrogen isotope methane"]),
+    ("δ13C-CO2", ["δ13c-co2", "13c-co2", "carbon isotope carbon dioxide"]),
     ("clumped isotope", ["clumped isotope"]),
     ("methane clumped isotope", ["methane clumped isotope"]),
     ("stable isotope", ["stable isotope"]),
-    ("城市水体", ["urban river", "urban lake", "urban water"]),
+    ("城市水体", ["urban river", "urban lake", "urban water"])
 ]
+
 
 def request_json(url):
     request = urllib.request.Request(
@@ -68,24 +71,83 @@ def request_json(url):
             "User-Agent": "greenhouse-gas-paper-tracker/1.0"
         }
     )
-    with urllib.request.urlopen(request, timeout=40) as response:
+    with urllib.request.urlopen(request, timeout=60) as response:
         return json.loads(response.read().decode("utf-8"))
 
-def search_semantic_scholar(query, limit=100):
-    params = urllib.parse.urlencode({
-        "query": query,
-        "limit": limit,
-        "fields": FIELDS
-    })
-    url = f"https://api.semanticscholar.org/graph/v1/paper/search?{params}"
-    data = request_json(url)
-    return data.get("data", [])
 
-def build_tags(paper):
+def restore_abstract(inverted_index):
+    if not inverted_index:
+        return ""
+
+    positions = []
+    for word, indexes in inverted_index.items():
+        for index in indexes:
+            positions.append((index, word))
+
+    positions.sort()
+    return " ".join(word for _, word in positions)
+
+
+def search_openalex(term, per_page=50):
+    params = urllib.parse.urlencode({
+        "search": term,
+        "per-page": per_page,
+        "filter": "from_publication_date:2018-01-01",
+        "sort": "publication_date:desc"
+    })
+    url = f"https://api.openalex.org/works?{params}"
+    data = request_json(url)
+    return data.get("results", [])
+
+
+def get_authors(work):
+    authorships = work.get("authorships") or []
+    names = []
+
+    for authorship in authorships[:8]:
+        author = authorship.get("author") or {}
+        name = author.get("display_name")
+        if name:
+            names.append(name)
+
+    return ", ".join(names)
+
+
+def get_journal(work):
+    primary_location = work.get("primary_location") or {}
+    source = primary_location.get("source") or {}
+    return source.get("display_name") or ""
+
+
+def get_paper_url(work):
+    primary_location = work.get("primary_location") or {}
+    landing_page_url = primary_location.get("landing_page_url")
+    return landing_page_url or work.get("id") or ""
+
+
+def get_pdf_url(work):
+    primary_location = work.get("primary_location") or {}
+    pdf_url = primary_location.get("pdf_url")
+    if pdf_url:
+        return pdf_url
+
+    best_oa = work.get("best_oa_location") or {}
+    return best_oa.get("pdf_url") or ""
+
+
+def normalize_doi(doi):
+    if not doi:
+        return ""
+
+    doi = doi.replace("https://doi.org/", "").replace("http://doi.org/", "")
+    return doi.strip()
+
+
+def build_tags(work, abstract):
     text = " ".join([
-        paper.get("title") or "",
-        paper.get("abstract") or "",
-        paper.get("venue") or ""
+        work.get("display_name") or "",
+        abstract or "",
+        get_journal(work)
     ]).lower()
 
     tags = []
@@ -93,57 +155,67 @@ def build_tags(paper):
         if any(keyword.lower() in text for keyword in keywords):
             tags.append(tag)
 
-    if "水体" not in tags and any(tag in tags for tag in ["河流", "湖泊", "水库", "湿地", "河口", "池塘", "沟渠"]):
+    water_tags = ["河流", "湖泊", "水库", "湿地", "河口", "池塘", "沟渠"]
+    if "水体" not in tags and any(tag in tags for tag in water_tags):
         tags.insert(0, "水体")
 
-    return tags[:12]
+    if not tags:
+        tags = ["水体"]
 
-def normalize_paper(paper):
-    external_ids = paper.get("externalIds") or {}
-    doi = external_ids.get("DOI")
-    authors = paper.get("authors") or []
-    open_pdf = paper.get("openAccessPdf") or {}
+    return tags[:14]
+
+
+def normalize_work(work):
+    abstract = restore_abstract(work.get("abstract_inverted_index"))
+    doi = normalize_doi(work.get("doi"))
+
+    referenced_works = work.get("referenced_works") or []
 
     return {
-        "id": paper.get("paperId"),
-        "title": paper.get("title") or "",
-        "abstract": paper.get("abstract") or "",
-        "authors": ", ".join(author.get("name", "") for author in authors[:8] if author.get("name")),
-        "journal": paper.get("venue") or "",
-        "year": paper.get("year"),
-        "publicationDate": paper.get("publicationDate") or paper.get("year") or "",
-        "citations": paper.get("citationCount") or 0,
-        "references": paper.get("referenceCount") or 0,
-        "source": "Semantic Scholar",
-        "doi": doi or "",
-        "paperUrl": paper.get("url") or "",
-        "pdfUrl": open_pdf.get("url") or "",
-        "tags": build_tags(paper),
+        "id": work.get("id") or "",
+        "title": work.get("display_name") or "",
+        "abstract": abstract,
+        "authors": get_authors(work),
+        "journal": get_journal(work),
+        "year": work.get("publication_year"),
+        "publicationDate": work.get("publication_date") or work.get("publication_year") or "",
+        "citations": work.get("cited_by_count") or 0,
+        "references": len(referenced_works),
+        "source": "OpenAlex",
+        "doi": doi,
+        "paperUrl": get_paper_url(work),
+        "pdfUrl": get_pdf_url(work),
+        "tags": build_tags(work, abstract),
         "updatedAt": datetime.utcnow().isoformat(timespec="seconds") + "Z"
     }
 
+
 def sort_key(paper):
-    date_value = str(paper.get("publicationDate") or paper.get("year") or "")
-    return date_value
+    return str(paper.get("publicationDate") or paper.get("year") or "")
+
 
 def main():
     collected = {}
 
-    for query in QUERIES:
-        print(f"Searching: {query}")
+    for term in SEARCH_TERMS:
+        print(f"Searching OpenAlex: {term}")
+
         try:
-            results = search_semantic_scholar(query)
+            results = search_openalex(term)
         except Exception as error:
             print(f"Search failed: {error}")
             continue
 
-        for item in results:
-            normalized = normalize_paper(item)
-            key = normalized.get("doi") or normalized.get("id") or normalized.get("title")
-            if key and normalized.get("title"):
-                collected[key] = normalized
+        for work in results:
+            paper = normalize_work(work)
+            key = paper.get("doi") or paper.get("id") or paper.get("title")
 
-        time.sleep(3)
+            if not key or not paper.get("title"):
+                continue
+
+            collected[key] = paper
+
+        time.sleep(1)
 
     papers = list(collected.values())
     papers.sort(key=sort_key, reverse=True)
@@ -155,6 +227,7 @@ def main():
     )
 
     print(f"Saved {len(papers)} papers to {OUTPUT_FILE}")
+
 
 if __name__ == "__main__":
     main()
