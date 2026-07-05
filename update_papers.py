@@ -7,10 +7,20 @@ from datetime import datetime
 from pathlib import Path
 
 OUTPUT_FILE = Path("papers.json")
-MAX_PAPERS = 300
+MAX_PAPERS = 500
 FROM_YEAR = 2018
 
 SEARCH_TERMS = [
+    "aquatic greenhouse gas emissions",
+    "inland water greenhouse gas emissions",
+    "freshwater greenhouse gas emissions",
+    "lake greenhouse gas emissions",
+    "river greenhouse gas emissions",
+    "reservoir greenhouse gas emissions",
+    "wetland greenhouse gas emissions",
+    "pond greenhouse gas emissions",
+    "stream greenhouse gas emissions",
+    "estuary greenhouse gas emissions",
     "greenhouse gas methane lake",
     "greenhouse gas methane river",
     "greenhouse gas methane reservoir",
@@ -18,6 +28,21 @@ SEARCH_TERMS = [
     "greenhouse gas carbon dioxide lake",
     "greenhouse gas carbon dioxide river",
     "greenhouse gas nitrous oxide wetland",
+    "greenhouse gas emissions sediments",
+    "carbon dioxide methane nitrous oxide aquatic",
+    "carbon dioxide methane nitrous oxide wetland",
+    "methane flux inland waters",
+    "carbon dioxide flux inland waters",
+    "nitrous oxide flux inland waters",
+    "methane emissions from lakes",
+    "methane emissions from rivers",
+    "methane emissions from reservoirs",
+    "methane emissions from wetlands",
+    "co2 emissions from lakes",
+    "co2 emissions from rivers",
+    "co2 emissions from reservoirs",
+    "n2o emissions from rivers",
+    "n2o emissions from wetlands",
     "methane emission lake",
     "methane emission river",
     "methane emission reservoir",
@@ -32,18 +57,35 @@ SEARCH_TERMS = [
     "floating chamber greenhouse gas wetland",
     "floating chamber methane lake",
     "riparian greenhouse gas methane",
+    "riparian zone greenhouse gas emissions",
     "riparian nitrous oxide emission",
     "littoral zone methane emission",
+    "littoral greenhouse gas emissions",
+    "shoreline greenhouse gas emissions",
     "drawdown zone methane reservoir",
+    "drawdown zone greenhouse gas emissions",
+    "water level fluctuation methane emission",
     "aquatic terrestrial interface greenhouse gas",
+    "aquatic terrestrial interface methane",
     "sediment methane production lake",
+    "sediment methane production wetland",
     "sediment methane oxidation wetland",
+    "methane production sediments",
+    "methane oxidation sediments",
+    "methanogenesis lake sediment",
+    "methanotrophy wetland sediment",
     "stable isotope methane lake sediment",
     "stable isotope methane wetland sediment",
+    "stable isotopes methane freshwater",
     "methane isotope lake sediment",
     "methane isotope wetland",
+    "carbon isotopes methane sediment",
+    "hydrogen isotopes methane sediment",
+    "methane source isotope wetland",
+    "methane source isotope lake",
     "methane clumped isotope sediment",
     "clumped isotope methane",
+    "clumped isotopes methane source",
     "carbon isotope methane aquatic sediment",
     "stable isotopes carbon dioxide methane river",
 ]
@@ -97,27 +139,34 @@ TAG_RULES = [
 ]
 
 POSITIVE_KEYWORDS = [
-    "greenhouse gas", "methane", "ch4", "carbon dioxide", "co2", "nitrous oxide", "n2o",
-    "emission", "emissions", "flux", "fluxes", "ebullition", "diffusive flux", "floating chamber",
-    "lake", "river", "reservoir", "wetland", "pond", "stream", "sediment", "estuary",
-    "riparian", "littoral", "shoreline", "drawdown zone", "aquatic-terrestrial",
-    "stable isotope", "isotope", "isotopic", "clumped isotope", "methane isotope",
+    "greenhouse gas", "greenhouse gases", "ghg",
+    "methane", "ch4", "carbon dioxide", "co2", "nitrous oxide", "n2o",
+    "emission", "emissions", "flux", "fluxes", "ebullition", "diffusive flux", "diffusion",
+    "floating chamber", "chamber", "gas transfer",
+    "lake", "river", "reservoir", "wetland", "pond", "stream", "sediment", "estuary", "freshwater",
+    "inland water", "inland waters", "aquatic", "riparian", "littoral", "shoreline",
+    "drawdown zone", "water level fluctuation", "aquatic terrestrial", "aquatic-terrestrial",
+    "methanogenesis", "methanotrophy", "methane production", "methane oxidation",
+    "stable isotope", "stable isotopes", "isotope", "isotopic", "clumped isotope", "methane isotope",
 ]
 
 CORE_GAS_KEYWORDS = [
-    "greenhouse gas", "methane", "ch4", "carbon dioxide", "co2", "nitrous oxide", "n2o",
+    "greenhouse gas", "greenhouse gases", "methane", "ch4",
+    "carbon dioxide", "co2", "nitrous oxide", "n2o",
 ]
 
 CORE_ENV_KEYWORDS = [
     "lake", "river", "reservoir", "wetland", "pond", "stream", "sediment",
     "riparian", "littoral", "shoreline", "drawdown zone", "aquatic", "estuary",
+    "freshwater", "inland water", "inland waters",
 ]
 
 NEGATIVE_KEYWORDS = [
     "combustion", "engine", "fuel cell", "coal mine", "natural gas pipeline",
     "biogas reactor", "anaerobic digester", "landfill", "wastewater treatment plant",
     "medical", "clinical", "patient", "tumor", "cancer", "battery", "photocatalyst",
-    "cement", "steel", "building material", "coal-fired",
+    "cement", "steel", "building material", "coal-fired", "power plant",
+    "livestock", "rumen", "enteric fermentation",
 ]
 
 
@@ -286,7 +335,7 @@ def main():
         if isinstance(year, int) and year < FROM_YEAR:
             continue
 
-        if score >= 12:
+        if score >= 8:
             papers.append(paper)
 
     papers.sort(key=sort_key, reverse=True)
