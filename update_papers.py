@@ -9,26 +9,7 @@ from pathlib import Path
 OUTPUT_FILE = Path("papers.json")
 MAX_PAPERS = 350
 FROM_YEAR = 2018
-
-SEMANTIC_SCHOLAR_TERMS = [
-    "greenhouse gas methane lake",
-    "greenhouse gas methane river",
-    "greenhouse gas methane reservoir",
-    "greenhouse gas methane wetland",
-    "carbon dioxide methane nitrous oxide aquatic",
-    "methane ebullition lake sediment",
-    "diffusive greenhouse gas flux river",
-    "floating chamber greenhouse gas wetland",
-    "riparian greenhouse gas methane",
-    "littoral zone methane emission",
-    "drawdown zone methane reservoir",
-    "aquatic terrestrial interface greenhouse gas",
-    "stable isotope methane lake sediment",
-    "methane isotope wetland sediment",
-    "methane clumped isotope sediment",
-    "clumped isotope methane",
-    "carbon isotope methane aquatic sediment",
-]
+SEMANTIC_DOI_ENRICH_LIMIT = 150
 
 OPENALEX_TERMS = [
     "greenhouse gas methane lake",
@@ -53,6 +34,26 @@ OPENALEX_TERMS = [
     "stable isotopes carbon dioxide methane river",
 ]
 
+SEMANTIC_SCHOLAR_TERMS = [
+    "greenhouse gas methane lake",
+    "greenhouse gas methane river",
+    "greenhouse gas methane reservoir",
+    "greenhouse gas methane wetland",
+    "carbon dioxide methane nitrous oxide aquatic",
+    "methane ebullition lake sediment",
+    "diffusive greenhouse gas flux river",
+    "floating chamber greenhouse gas wetland",
+    "riparian greenhouse gas methane",
+    "littoral zone methane emission",
+    "drawdown zone methane reservoir",
+    "aquatic terrestrial interface greenhouse gas",
+    "stable isotope methane lake sediment",
+    "methane isotope wetland sediment",
+    "methane clumped isotope sediment",
+    "clumped isotope methane",
+    "carbon isotope methane aquatic sediment",
+]
+
 SEMANTIC_FIELDS = ",".join([
     "paperId",
     "title",
@@ -65,7 +66,7 @@ SEMANTIC_FIELDS = ",".join([
     "referenceCount",
     "externalIds",
     "url",
-    "openAccessPdf"
+    "openAccessPdf",
 ])
 
 TAG_RULES = [
@@ -103,26 +104,26 @@ TAG_RULES = [
 
 POSITIVE_KEYWORDS = [
     "greenhouse gas", "methane", "ch4", "carbon dioxide", "co2", "nitrous oxide", "n2o",
-    "emission", "flux", "ebullition", "diffusive flux", "floating chamber",
-    "lake", "river", "reservoir", "wetland", "pond", "stream", "sediment",
-    "riparian", "littoral", "shoreline", "drawdown zone", "aquatic-terrestrial",
-    "stable isotope", "isotope", "clumped isotope", "methane isotope"
+    "emission", "emissions", "flux", "fluxes", "ebullition", "diffusive flux", "floating chamber",
+    "lake", "river", "reservoir", "wetland", "pond", "stream", "sediment", "estuary",
+    "riparian", "littoral", "shoreline", "drawdown zone", "aquatic terrestrial", "aquatic-terrestrial",
+    "stable isotope", "isotope", "isotopic", "clumped isotope", "methane isotope",
 ]
 
 CORE_GAS_KEYWORDS = [
-    "greenhouse gas", "methane", "ch4", "carbon dioxide", "co2", "nitrous oxide", "n2o"
+    "greenhouse gas", "methane", "ch4", "carbon dioxide", "co2", "nitrous oxide", "n2o",
 ]
 
 CORE_ENV_KEYWORDS = [
     "lake", "river", "reservoir", "wetland", "pond", "stream", "sediment",
-    "riparian", "littoral", "shoreline", "drawdown zone", "aquatic", "estuary"
+    "riparian", "littoral", "shoreline", "drawdown zone", "aquatic", "estuary",
 ]
 
 NEGATIVE_KEYWORDS = [
     "combustion", "engine", "fuel cell", "coal mine", "natural gas pipeline",
     "biogas reactor", "anaerobic digester", "landfill", "wastewater treatment plant",
     "medical", "clinical", "patient", "tumor", "cancer", "battery", "photocatalyst",
-    "cement", "steel", "building material", "satellite retrieval only"
+    "cement", "steel", "building material", "satellite retrieval only", "coal-fired",
 ]
 
 
@@ -131,7 +132,7 @@ def request_json(url):
         url,
         headers={"User-Agent": "greenhouse-gas-paper-tracker/1.0"}
     )
-    with urllib.request.urlopen(request, timeout=60) as response:
+    with urllib.request.urlopen(request, timeout=70) as response:
         return json.loads(response.read().decode("utf-8"))
 
 
@@ -192,7 +193,7 @@ def relevance_score(paper):
         paper.get("title") or "",
         paper.get("abstract") or "",
         paper.get("journal") or "",
-        " ".join(paper.get("tags") or [])
+        " ".join(paper.get("tags") or []),
     ]).lower()
 
     score = 0
@@ -207,7 +208,7 @@ def relevance_score(paper):
     if any(keyword in text for keyword in CORE_ENV_KEYWORDS):
         score += 8
 
-    if "isotope" in text or "clumped isotope" in text:
+    if "isotope" in text or "isotopic" in text or "clumped isotope" in text:
         score += 6
 
     if "flux" in text or "emission" in text or "ebullition" in text:
@@ -227,51 +228,12 @@ def relevance_score(paper):
     return score
 
 
-def search_semantic_scholar(term, limit=80):
-    params = urllib.parse.urlencode({
-        "query": term,
-        "limit": limit,
-        "fields": SEMANTIC_FIELDS
-    })
-    url = f"https://api.semanticscholar.org/graph/v1/paper/search?{params}"
-    data = request_json(url)
-    return data.get("data", [])
-
-
-def normalize_semantic_paper(item):
-    external_ids = item.get("externalIds") or {}
-    doi = normalize_doi(external_ids.get("DOI"))
-    authors = item.get("authors") or []
-    open_pdf = item.get("openAccessPdf") or {}
-    title = normalize_text(item.get("title"))
-    abstract = normalize_text(item.get("abstract"))
-    journal = normalize_text(item.get("venue"))
-
-    return {
-        "id": item.get("paperId") or "",
-        "title": title,
-        "abstract": abstract,
-        "authors": ", ".join(author.get("name", "") for author in authors[:8] if author.get("name")),
-        "journal": journal,
-        "year": item.get("year"),
-        "publicationDate": item.get("publicationDate") or item.get("year") or "",
-        "citations": item.get("citationCount") or 0,
-        "references": item.get("referenceCount") or 0,
-        "source": "Semantic Scholar",
-        "doi": doi,
-        "paperUrl": item.get("url") or "",
-        "pdfUrl": open_pdf.get("url") or "",
-        "tags": build_tags(title, abstract, journal),
-        "updatedAt": datetime.utcnow().isoformat(timespec="seconds") + "Z"
-    }
-
-
 def search_openalex(term, per_page=60):
     params = urllib.parse.urlencode({
         "search": term,
         "per-page": per_page,
         "filter": f"from_publication_date:{FROM_YEAR}-01-01",
-        "sort": "publication_date:desc"
+        "sort": "publication_date:desc",
     })
     url = f"https://api.openalex.org/works?{params}"
     data = request_json(url)
@@ -329,7 +291,63 @@ def normalize_openalex_work(work):
         "paperUrl": openalex_paper_url(work),
         "pdfUrl": openalex_pdf_url(work),
         "tags": build_tags(title, abstract, journal),
-        "updatedAt": datetime.utcnow().isoformat(timespec="seconds") + "Z"
+        "updatedAt": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+    }
+
+
+def search_semantic_scholar(term, limit=80):
+    params = urllib.parse.urlencode({
+        "query": term,
+        "limit": limit,
+        "fields": SEMANTIC_FIELDS,
+    })
+    url = f"https://api.semanticscholar.org/graph/v1/paper/search?{params}"
+    data = request_json(url)
+    return data.get("data", [])
+
+
+def fetch_semantic_by_doi(doi):
+    doi = normalize_doi(doi)
+    if not doi:
+        return None
+
+    paper_id = urllib.parse.quote(f"DOI:{doi}", safe="")
+    params = urllib.parse.urlencode({"fields": SEMANTIC_FIELDS})
+    url = f"https://api.semanticscholar.org/graph/v1/paper/{paper_id}?{params}"
+
+    try:
+        return request_json(url)
+    except Exception as error:
+        print(f"Semantic Scholar DOI lookup failed for {doi}: {error}")
+        return None
+
+
+def normalize_semantic_paper(item):
+    external_ids = item.get("externalIds") or {}
+    doi = normalize_doi(external_ids.get("DOI"))
+    authors = item.get("authors") or []
+    open_pdf = item.get("openAccessPdf") or {}
+
+    title = normalize_text(item.get("title"))
+    abstract = normalize_text(item.get("abstract"))
+    journal = normalize_text(item.get("venue"))
+
+    return {
+        "id": item.get("paperId") or "",
+        "title": title,
+        "abstract": abstract,
+        "authors": ", ".join(author.get("name", "") for author in authors[:8] if author.get("name")),
+        "journal": journal,
+        "year": item.get("year"),
+        "publicationDate": item.get("publicationDate") or item.get("year") or "",
+        "citations": item.get("citationCount") or 0,
+        "references": item.get("referenceCount") or 0,
+        "source": "Semantic Scholar",
+        "doi": doi,
+        "paperUrl": item.get("url") or "",
+        "pdfUrl": open_pdf.get("url") or "",
+        "tags": build_tags(title, abstract, journal),
+        "updatedAt": datetime.utcnow().isoformat(timespec="seconds") + "Z",
     }
 
 
@@ -339,7 +357,6 @@ def merge_paper(existing, incoming):
 
     merged = dict(existing)
 
-    # 优先保留 Semantic Scholar 的论文页，但用 OpenAlex 补充缺失 DOI/期刊/PDF 等。
     for field in ["doi", "journal", "authors", "publicationDate", "year", "paperUrl", "pdfUrl", "abstract"]:
         if not merged.get(field) and incoming.get(field):
             merged[field] = incoming[field]
@@ -368,23 +385,6 @@ def sort_key(paper):
 def main():
     collected = {}
 
-    for term in SEMANTIC_SCHOLAR_TERMS:
-        print(f"Searching Semantic Scholar: {term}")
-        try:
-            results = search_semantic_scholar(term)
-        except Exception as error:
-            print(f"Semantic Scholar search failed: {error}")
-            time.sleep(5)
-            continue
-
-        for item in results:
-            paper = normalize_semantic_paper(item)
-            key = paper_key(paper)
-            if key and paper.get("title"):
-                collected[key] = merge_paper(collected.get(key), paper)
-
-        time.sleep(3)
-
     for term in OPENALEX_TERMS:
         print(f"Searching OpenAlex: {term}")
         try:
@@ -402,6 +402,46 @@ def main():
 
         time.sleep(1)
 
+    for term in SEMANTIC_SCHOLAR_TERMS:
+        print(f"Searching Semantic Scholar: {term}")
+        try:
+            results = search_semantic_scholar(term)
+        except Exception as error:
+            print(f"Semantic Scholar search failed: {error}")
+            time.sleep(5)
+            continue
+
+        for item in results:
+            paper = normalize_semantic_paper(item)
+            key = paper_key(paper)
+            if key and paper.get("title"):
+                collected[key] = merge_paper(collected.get(key), paper)
+
+        time.sleep(3)
+
+    print("Enriching OpenAlex papers with Semantic Scholar DOI lookup...")
+
+    enriched_count = 0
+    for key, paper in list(collected.items()):
+        doi = paper.get("doi")
+        if not doi:
+            continue
+
+        semantic_item = fetch_semantic_by_doi(doi)
+        if not semantic_item:
+            time.sleep(1)
+            continue
+
+        semantic_paper = normalize_semantic_paper(semantic_item)
+        collected[key] = merge_paper(collected.get(key), semantic_paper)
+        enriched_count += 1
+        time.sleep(1)
+
+        if enriched_count >= SEMANTIC_DOI_ENRICH_LIMIT:
+            break
+
+    print(f"Enriched {enriched_count} papers with Semantic Scholar")
+
     papers = []
     for paper in collected.values():
         score = relevance_score(paper)
@@ -411,7 +451,6 @@ def main():
         if isinstance(year, int) and year < FROM_YEAR:
             continue
 
-        # 分数阈值越高，文章越精准；如果觉得结果太少，可改成 10。
         if score >= 12:
             papers.append(paper)
 
@@ -420,7 +459,7 @@ def main():
 
     OUTPUT_FILE.write_text(
         json.dumps(papers, ensure_ascii=False, indent=2),
-        encoding="utf-8"
+        encoding="utf-8",
     )
 
     print(f"Saved {len(papers)} papers to {OUTPUT_FILE}")
@@ -428,3 +467,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
