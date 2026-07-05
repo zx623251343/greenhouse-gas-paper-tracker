@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>水体与岸带温室气体文献追踪</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="hero">
+    <div class="hero__overlay"></div>
+    <div class="hero__inner">
+      <section class="hero__copy" aria-labelledby="page-title">
+        <p class="eyebrow">自动更新的研究文献表</p>
+        <h1 id="page-title">水体与岸带<br />温室气体文献<br />追踪</h1>
+        <p class="hero__lead">聚焦河流、湖泊、水库、湿地、河口与岸带界面中的 CO2、CH4、N2O 通量和产生机制，追踪扩散释放、冒泡释放、沉积物过程、碳氮循环与水陆交错带温室气体排放。默认使用 Semantic Scholar 检索与回填引用、参考文献和相似文章。</p>
+      </section>
+      <aside class="status-card" aria-label="追踪状态">
+        <span class="status-card__dot"></span>
+        <dl>
+          <dt>最近更新</dt>
+          <dd>2026年7月5日</dd>
+          <dt>已收录论文</dt>
+          <dd>337</dd>
+          <dt>数据来源</dt>
+          <dd>Semantic Scholar</dd>
+          <dt>联系我们</dt>
+          <dd>zx7573@tju.edu.cn</dd>
+        </dl>
+      </aside>
+    </div>
+  </header>
+
+  <main>
+    <section class="topic-grid" aria-label="追踪主题">
+      <article>
+        <span>01</span>
+        <h2>水体环境</h2>
+        <p>覆盖河流、湖泊、水库、湿地、河口、溪流、池塘和水-气界面等水体环境。</p>
+      </article>
+      <article>
+        <span>02</span>
+        <h2>岸带与水陆界面</h2>
+        <p>关注 riparian zone、littoral zone、drawdown zone、shoreline、消落带、滨岸带和水陆交错带。</p>
+      </article>
+      <article>
+        <span>03</span>
+        <h2>温室气体过程</h2>
+        <p>覆盖 CO2、CH4、N2O 的扩散通量、冒泡释放、甲烷氧化、沉积物产生和碳氮耦合过程。</p>
+      </article>
+    </section>
+
+    <section class="controls" aria-label="筛选与统计">
+      <div class="filters">
+        <label>
+          <span>搜索论文</span>
+          <input id="searchInput" type="search" placeholder="输入关键词、作者、期刊、DOI、气体类型或生态系统" />
+        </label>
+        <label>
+          <span>数据来源</span>
+          <select id="sourceSelect">
+            <option value="all">全部来源</option>
+            <option value="Semantic Scholar">Semantic Scholar</option>
+            <option value="Crossref">Crossref</option>
+            <option value="PubMed">PubMed</option>
+          </select>
+        </label>
+      </div>
+      <div class="chips" id="chipFilters" aria-label="关键词筛选"></div>
+      <div class="metrics" id="metricCards"></div>
+    </section>
+
+    <section class="papers" aria-labelledby="table-title">
+      <div class="papers__head">
+        <h2 id="table-title">最新论文表格</h2>
+        <div class="papers__meta">
+          <span id="resultSummary">全部 · 0 篇</span>
+          <label>
+            每页
+            <select id="pageSizeSelect">
+              <option>10</option>
+              <option selected>50</option>
+              <option>100</option>
+            </select>
+          </label>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>日期 ↓</th>
+              <th>题名</th>
+              <th>作者</th>
+              <th>期刊</th>
+              <th>引用</th>
+              <th>参考</th>
+              <th>来源</th>
+              <th>链接</th>
+            </tr>
+          </thead>
+          <tbody id="paperRows"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
